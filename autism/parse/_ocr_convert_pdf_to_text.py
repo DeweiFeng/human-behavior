@@ -3,7 +3,7 @@ import pytesseract
 from PIL import Image
 import io
 import os
-
+# This script performs OCR on selected pages of a PDF and saves the text to separate files.
 def ocr_selected_pages_separately(pdf_path, output_dir, selected_pages):
     doc = fitz.open(pdf_path)
     os.makedirs(output_dir, exist_ok=True)
