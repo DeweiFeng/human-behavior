@@ -1,13 +1,21 @@
-from dataloaders.meld_loader import MELDDataset
+from dataloaders.daic_loader import DAICWOZDataset
 from torch.utils.data import Dataset, DataLoader
 
-dataset = MELDDataset(data_dir='/orcd/pool/003/dewei/dataset/meld/MELD.Raw', split='test')
-dataloader = DataLoader(dataset, batch_size=8, shuffle=True)
+root_dir = "/home/dewei/workspace/dewei/dataset/daicwoz"
 
-for batch in dataloader:
-    videos = batch['video']
-    labels = batch['label']
-    filenames = batch['filename']
+train_dataset = DAICWOZDataset(
+    root_dir=root_dir,
+    split_csv=root_dir + "/train_split_Depression_AVEC2017.csv",
+    load_audio=False,
+    load_covarep=True
+)
 
-    print(type(videos))
-    # do something here
+dev_dataset = DAICWOZDataset(
+    root_dir=root_dir,
+    split_csv=root_dir + "/dev_split_Depression_AVEC2017.csv"
+)
+
+test_dataset = DAICWOZDataset(
+    root_dir=root_dir,
+    split_csv=root_dir + "/test_split_Depression_AVEC2017.csv"
+)
