@@ -83,16 +83,28 @@ def main():
         print("Video already downloaded.")
 
     for name, start, end in tqdm(SEGMENTS, desc="Extracting segments"):
-        seg_file = os.path.join(OUTPUT_DIR, f"{name}.mp4")
+        # New structure: segment_dir/video + segment_dir/frames
+        segment_dir = os.path.join(OUTPUT_DIR, name)
+        video_out_dir = os.path.join(segment_dir, "video")
+        frames_out_dir = os.path.join(segment_dir, "frames")
+
+        ensure_dir(video_out_dir)
+        ensure_dir(frames_out_dir)
+
+        seg_file = os.path.join(video_out_dir, f"{name}.mp4")
         start_sec = timestamp_to_seconds(start)
         end_sec = timestamp_to_seconds(end)
+
         try:
+            # Extract video segment
             extract_segment(VIDEO_FILE, start_sec, end_sec, seg_file)
-            extract_frames(seg_file, os.path.join(OUTPUT_DIR, f"{name}_frames"))
+            # Extract frames
+            extract_frames(seg_file, frames_out_dir)
         except Exception as e:
             print(f"Error extracting {name}: {e}")
 
     print(f"Segments saved in: {os.path.abspath(OUTPUT_DIR)}")
+
 
 if __name__ == "__main__":
     main()
