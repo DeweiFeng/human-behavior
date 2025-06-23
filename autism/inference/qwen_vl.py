@@ -100,7 +100,7 @@ class QwenVL:
         inputs = inputs.to(self.device)
         return inputs
 
-    def generate(self, inputs, max_new_tokens=128):
+    def generate(self, inputs, max_new_tokens=1256):
         """Run inference"""
         with torch.no_grad():
             generated_ids = self.model.generate(**inputs, max_new_tokens=max_new_tokens)

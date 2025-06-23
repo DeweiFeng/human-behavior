@@ -63,9 +63,6 @@ def main(config):
         meta_data["module"] = config["module"]
         meta_data["test_type"] = config["test_type"]
 
-    # Also save prompt string for reproducibility
-    meta_data["prompt_text"] = config["prompt"]
-
     # Save outputs
     os.makedirs(os.path.dirname(config["output_path"]), exist_ok=True)
     qwen.save_outputs(outputs, save_path=config["output_path"], meta_data=meta_data)
