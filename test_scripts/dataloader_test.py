@@ -1,3 +1,4 @@
+from dataloaders.daic_loader import DAICWOZDataset
 from dataloaders.meld_loader import MELDDataset
 from dataloaders.mosei_loader import MOSEIDataset
 import torch
