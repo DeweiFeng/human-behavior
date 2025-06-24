@@ -1,74 +1,90 @@
 import os
 import zipfile
 import pandas as pd
-from typing import List, Dict, Optional
+import csv
 from torch.utils.data import Dataset
 
 
 class DAICWOZDataset(Dataset):
     def __init__(
         self,
-        root_dir: str,
-        split_csv: str,
-        split_type: str,
-        load_audio: bool = False,
-        load_covarep: bool = False,
+        root_dir,
+        split_csv,
+        label_type="binary",  # or "score"
+        modalities=("transcript", "covarep", "clnf_aus", "clnf_pose"),
+        exclude_sessions=(342, 394, 398, 460),
     ):
-        """
-        Args:
-            root_dir (str): Folder containing all *_P.zip
-            split_csv (str): Path to the split CSV file (e.g. train/dev/test)
-            load_audio (bool): If True, loads raw audio bytes
-            load_covarep (bool): If True, loads COVAREP features as dataframe
-        """
         self.root_dir = root_dir
         self.split_df = pd.read_csv(split_csv)
-
-        # Make all column names lowercase
         self.split_df.columns = self.split_df.columns.str.lower()
 
-        # Optionally make all string values lowercase too
-        self.split_df = self.split_df.applymap(
-            lambda x: x.lower() if isinstance(x, str) else x
-        )
+        self.subject_ids = self.split_df["participant_id"].astype(str).tolist()
+        self.exclude_sessions = set(str(s) for s in exclude_sessions)
+        self.subject_ids = [sid for sid in self.subject_ids if sid not in self.exclude_sessions]
+        self.modalities = set(modalities)
 
-        self.subject_ids = self.split_df['participant_id'].astype(str).tolist()
-        self.label_map = dict(zip(
-            self.split_df['participant_id'].astype(str),
-        ))
-        self.load_audio = load_audio
-        self.load_covarep = load_covarep
+        # Detect correct label column
+        if label_type == "binary":
+            label_col = "phq8_binary" if "phq8_binary" in self.split_df.columns else "phq_binary"
+        elif label_type == "score":
+            label_col = "phq8_score" if "phq8_score" in self.split_df.columns else "phq_score"
+        else:
+            raise ValueError("label_type must be 'binary' or 'score'")
+
+        self.label_map = dict(zip(self.split_df["participant_id"].astype(str), self.split_df[label_col]))
 
     def __len__(self):
         return len(self.subject_ids)
 
     def __getitem__(self, idx):
         subject_id = self.subject_ids[idx]
-        zip_filename = f"{subject_id}_P.zip"
-        zip_path = os.path.join(self.root_dir, zip_filename)
+        zip_path = os.path.join(self.root_dir, f"{subject_id}_P.zip")
+        prefix = f"{subject_id}_"
 
         sample = {
             "subject_id": subject_id,
-            "label": self.label_map.get(subject_id, -1),
-            "transcript": [],
+            "label": self.label_map.get(subject_id, -1)
         }
 
         with zipfile.ZipFile(zip_path, "r") as z:
-            prefix = f"{subject_id}_"
+            # Load transcript
+            if "transcript" in self.modalities:
+                try:
+                    with z.open(f"{prefix}TRANSCRIPT.csv") as f:
+                        
+                        
+                        df = pd.read_csv(f, sep="\t")
 
-            # Transcript
-            with z.open(f"{prefix}TRANSCRIPT.csv") as f:
-                df = pd.read_csv(f)
-                sample["transcript"] = df["Value"].tolist()
+                        start_times = df["start_time"].to_list()
+                        stop_times = df["stop_time"].to_list()
+                        speakers = df["speaker"].to_list()
+                        values = df["value"].to_list()
 
-            # Audio (optional)
-            if self.load_audio and f"{prefix}AUDIO.wav" in z.namelist():
-                with z.open(f"{prefix}AUDIO.wav") as audio_file:
-                    sample["audio"] = audio_file.read()
+                        sample["transcript"] = {
+                            "start_times": start_times,
+                            "stop_times": stop_times,
+                            "speakers": speakers,
+                            "values": values,
+                        }
+                except KeyError:
+                    sample["transcript"] = []
 
-            # COVAREP (optional)
-            if self.load_covarep and f"{prefix}COVAREP.csv" in z.namelist():
-                with z.open(f"{prefix}COVAREP.csv") as covarep_file:
-                    sample["covarep"] = pd.read_csv(covarep_file)
+            # Load COVAREP
+            if "covarep" in self.modalities and f"{prefix}COVAREP.csv" in z.namelist():
+                with z.open(f"{prefix}COVAREP.csv") as f:
+                    df = pd.read_csv(f)
+                    sample["covarep"] = df.fillna(0).to_numpy()
+
+            # Load CLNF AUs
+            if "clnf_aus" in self.modalities and f"{prefix}CLNF_AUs.txt" in z.namelist():
+                with z.open(f"{prefix}CLNF_AUs.txt") as f:
+                    df = pd.read_csv(f)
+                    sample["clnf_aus"] = df.fillna(0).to_numpy()
+
+            # Load CLNF Pose
+            if "clnf_pose" in self.modalities and f"{prefix}CLNF_pose.txt" in z.namelist():
+                with z.open(f"{prefix}CLNF_pose.txt") as f:
+                    df = pd.read_csv(f)
+                    sample["clnf_pose"] = df.fillna(0).to_numpy()
 
         return sample
