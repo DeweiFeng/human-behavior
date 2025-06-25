@@ -1,58 +1,65 @@
 import os
+import re
 import torch
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from torch.utils.data import Dataset, DataLoader
 from typing import Dict, List, Tuple, Any
+from dataset.template import BaseMultimodalDataset, MultimodalSample
+from moviepy.editor import VideoFileClip
 
-class PTSDITWDataset(Dataset):
-
+class PTSDITWDataset(BaseMultimodalDataset):
     # Note: the researcher also sent a folder of 3-fold splits that isn't integrated
-    # with this.
 
     TYPE_MAP = {
-        'PTSD': 0,
-        'normal': 1
+        'ptsd': 0,
+        'no ptsd': 1
     }
 
-    def __init__(self, root_dir, transform=None):
-        self.video_paths = []
-        self.labels = []
-        self.file_names = []
-        self.transform = transform
-        self._load_videos(root_dir)
-    
-    def _load_videos(self, root_dir):
-        for label_name in os.listdir(root_dir):
-            label_path = os.path.join(root_dir, label_name)
+    def __init__(self, data_dir: str, split: str):
+        super().__init__(modality_keys=["video"])
+
+        self.samples = []
+        split_path = os.path.join(data_dir, split)
+        for label_name in os.listdir(split_path):
+            label_path = os.path.join(split_path, label_name)
             if not os.path.isdir(label_path):
                 continue
-            label = 1 if label_name == "PTSD" else 0
+            label = 0 if label_name == "PTSD" else 1
             for subdir, _, files in os.walk(label_path):
+                cause = os.path.basename(os.path.dirname(subdir))
                 for file in files:
                     if file.endswith('.mp4'):
-                        self.video_paths.append(os.path.join(subdir, file))
-                        self.labels.append(label)
-                        self.file_names.append(file.replace('.mp4', ''))
+                        video_path = os.path.join(subdir, file)
+                        base = os.path.splitext(file)[0]
+                        utt_id = re.sub(r'[^a-zA-Z0-9]', '_', base).lower()
+                        clip = VideoFileClip(file)
+                        duration = clip.duration
+                        sample = MultimodalSample(
+                            id = utt_id, 
+                            video=video_path,
+                            label=label,
+                            metadata={
+                                "ptsd_cause": cause, 
+                                "video_length": duration
+                            }
+                        )
+                        self.samples.append(sample)
+
 
     def __len__(self):
-        return len(self.video_paths)
+        return len(self.samples)
 
     # idx refers to the index in video_paths that the video corresponds to
     def __getitem__(self, idx):
-        video_path = self.video_paths[idx]
-        label = self.labels[idx]
-        filename = self.file_names[idx]
+        sample = self.samples[idx]
 
-        with open(video_path, 'rb') as f:
-            video_bytes = f.read()
+        if isinstance(sample.video, str) and os.path.exists(sample.video):
+            with open(sample.video, "rb") as f:
+                sample.video = f.read()
         
-        return {
-            'video': video_bytes, # raw bytes, you may later decode this with torchvision.io or decord
-            'label': label, 
-            'filename': filename
-        }
+        return sample.to_dict()
 
 
     @classmethod
