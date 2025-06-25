@@ -51,7 +51,6 @@ class PTSDITWDataset(BaseMultimodalDataset):
     def __len__(self):
         return len(self.samples)
 
-    # idx refers to the index in video_paths that the video corresponds to
     def __getitem__(self, idx):
         sample = self.samples[idx]
 
