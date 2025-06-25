@@ -22,11 +22,13 @@ class PTSDITWDataset(BaseMultimodalDataset):
 
         self.samples = []
         split_path = os.path.join(data_dir, split)
+
         for label_name in os.listdir(split_path):
             label_path = os.path.join(split_path, label_name)
             if not os.path.isdir(label_path):
                 continue
             label = 0 if label_name == "PTSD" else 1
+
             for subdir, _, files in os.walk(label_path):
                 cause = os.path.basename(os.path.dirname(subdir))
                 for file in files:
@@ -36,6 +38,7 @@ class PTSDITWDataset(BaseMultimodalDataset):
                         utt_id = re.sub(r'[^a-zA-Z0-9]', '_', base).lower()
                         clip = VideoFileClip(file)
                         duration = clip.duration
+
                         sample = MultimodalSample(
                             id = utt_id, 
                             video=video_path,
