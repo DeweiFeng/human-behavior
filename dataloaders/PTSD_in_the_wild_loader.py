@@ -21,7 +21,8 @@ class PTSDITWDataset(BaseMultimodalDataset):
         super().__init__(modality_keys=["video"])
 
         self.samples = []
-        split_path = os.path.join(data_dir, split)
+        new_dir = os.path.join(data_dir, "MyDrive", "PTSD_Project_train_validation_test_split")
+        split_path = os.path.join(new_dir, split)
 
         for label_name in os.listdir(split_path):
             label_path = os.path.join(split_path, label_name)
