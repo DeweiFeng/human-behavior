@@ -10,6 +10,7 @@ class MultimodalSample:
         text: Optional[str] = None,
         audio: Optional[Union[np.ndarray, str]] = None,
         video: Optional[Union[bytes, str]] = None,
+        vision: Optional[np.ndarray] = None,
         face: Optional[np.ndarray] = None,
         gesture: Optional[np.ndarray] = None,
         physio: Optional[np.ndarray] = None,
@@ -21,6 +22,7 @@ class MultimodalSample:
         self.text = text
         self.audio = audio
         self.video = video
+        self.vision = vision
         self.face = face
         self.gesture = gesture
         self.physio = physio
@@ -35,7 +37,7 @@ class MultimodalSample:
 class BaseMultimodalDataset(Dataset):
     def __init__(
         self,
-        modality_keys=["text", "audio", "video", "eeg", "physio", "face", "gesture"],
+        modality_keys=["text", "audio", "video", "vision", "eeg", "physio", "face", "gesture"],
     ):
         self.samples = []
         self.modality_keys = modality_keys
