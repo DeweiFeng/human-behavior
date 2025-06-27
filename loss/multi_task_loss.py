@@ -57,3 +57,12 @@ class MultiTaskLoss(nn.Module):
             total_loss += self.lambda_personality * personality_loss
 
         return total_loss
+    
+
+def multi_task_loss(preds, labels, task):
+    if task == "phq8":
+        return sum(nn.CrossEntropyLoss()(logits, labels[i]) for i, logits in enumerate(preds)) / 8
+    elif task == "phq_binary":
+        return nn.CrossEntropyLoss()(preds, labels)
+    elif task == "emotion":
+        return nn.CrossEntropyLoss()(preds, labels)

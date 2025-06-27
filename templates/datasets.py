@@ -1,4 +1,4 @@
-from typing import Optional, Union, Dict
+from typing import Optional, Union, Dict, Any
 import numpy as np
 from torch.utils.data import Dataset
 
@@ -14,6 +14,7 @@ class MultimodalSample:
         gesture: Optional[np.ndarray] = None,
         physio: Optional[np.ndarray] = None,
         eeg: Optional[np.ndarray] = None,
+        task: Any = None,
         label: Optional[Union[int, float, str, Dict]] = None,
         metadata: Optional[Dict] = None,
     ):
