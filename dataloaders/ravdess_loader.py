@@ -44,20 +44,20 @@ class ravdess_loader(BaseMultimodalDataset):
 
                     ids_copy = ids.copy()
                     ids_copy[0] = "02"
-                    audio_visual_path = os.path.join(actor_path, '-'.join(ids))
+                    audio_visual_path = os.path.join(actor_path, '-'.join(ids_copy) + ".mp4")
                     if not os.path.exists(audio_visual_path):
                         continue
                 
                     ids_copy[0] = "01"
-                    video_path = os.path.join(actor_path, '-'.join(ids))
+                    video_path = os.path.join(actor_path, '-'.join(ids_copy) + ".mp4")
                     if not os.path.exists(video_path):
                         continue
                 
-                    vocal_channel = "speech" if id[1] == "01" else "song"
-                    label = int(id[2])
+                    vocal_channel = "speech" if ids[1] == "01" else "song"
+                    label = int(ids[2])
 
                     intensity = None if label == 1 else ("normal" if ids[3] == "01" else "strong")
-                    sentence = "Kids are talking by the door" if ids[4] == "01" else "Dogs are sitting by the door"
+                    text = "Kids are talking by the door" if ids[4] == "01" else "Dogs are sitting by the door"
                     repetition = "1st repetition" if ids[5] == "01" else "2nd repetition"
 
                     sample = MultimodalSample(
@@ -66,11 +66,11 @@ class ravdess_loader(BaseMultimodalDataset):
                         video=video_path,
                         audio_visual=audio_visual_path,
                         label=label,
+                        text=text,
                         metadata={
                             "actor": actor,
                             "vocal channel": vocal_channel,
                             "intensity": intensity,
-                            "sentence": sentence,
                             "repetition": repetition
                         }
                     )
@@ -79,7 +79,7 @@ class ravdess_loader(BaseMultimodalDataset):
     def __len__(self):
         return len(self.samples)
     
-    def __get__(self, idx):
+    def __getitem__(self, idx):
         sample = self.samples[idx]
 
         for key in ["audio", "video", "audio_visual"]:
