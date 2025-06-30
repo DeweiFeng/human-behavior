@@ -2,6 +2,7 @@ import argparse
 import yaml
 import os
 from qwen_vl import QwenVL
+import json
 from utils import get_frame_paths, load_rubrics_json, find_test_prompt, load_non_test_prompt
 
 def main(config):
@@ -105,13 +106,17 @@ if __name__ == "__main__":
 
     # Now set prompt; if we aren't scoring via the rubrics, use non_test_prompt
     # Otherwise, we score via the rubrics
+
     if config.get("non_test_prompt"):
         config["prompt"] = load_non_test_prompt(config["non_test_prompt"])
     elif config.get("rubrics_json") and config.get("module") and config.get("test_type"):
         data = load_rubrics_json(config["rubrics_json"])
         config["prompt"] = find_test_prompt(data, config["module"], config["test_type"])
     else:
-        raise ValueError("You must either provide 'non_test_prompt' OR ('rubrics_json' + 'module' + 'test_type') in config or CLI.")
+        raise ValueError(
+            f"You must either provide 'non_test_prompt' OR ('rubrics_json' + 'module' + 'test_type') in config or CLI. "
+            f"Your configurations are:\n{json.dumps(config, indent=2)}"
+        )
 
     # Run main
     main(config)
