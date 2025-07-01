@@ -168,7 +168,7 @@ def test_LMVD_dataloader(data_dir):
 
 if __name__ == "__main__":
     # Requires absolute path
-    data_dir = "/home/crli9772/LMVD_Feature"
+    data_dir = "~/LMVD_Feature"
     test_LMVD_dataloader(data_dir)
 
     
