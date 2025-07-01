@@ -28,6 +28,9 @@ def main(json_dir: str, csv_path: str, output_dir: str):
     print("\nAccuracy by Test Type:")
     print(by_test.to_string())
 
+    print("\nAccuracy by Segment:")
+    print(by_segment.to_string())
+
     plot_segment_accuracy(by_segment, output_dir=output_dir, filetype="pdf")
     plot_module_accuracy(by_module, output_dir=output_dir, filetype="pdf")
 
