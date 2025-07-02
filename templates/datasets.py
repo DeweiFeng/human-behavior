@@ -27,6 +27,7 @@ class MultimodalSample:
         self.physio = physio
         self.eeg = eeg
         self.label = label
+        self.task = task
         self.metadata = metadata or {}
 
     def to_dict(self):

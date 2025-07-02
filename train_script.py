@@ -6,29 +6,87 @@ from transformers import AutoTokenizer, AutoFeatureExtractor
 from models import MultiTaskMentalHealthModel
 from datasets import DAICWOZDataset
 from tqdm import tqdm
+import numpy as np
 import os
 
 # === Config ===
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-TEXT_MODEL = "meta-llama/Llama-3.1-8b"
+TEXT_MODEL = "meta-llama/Llama-3.2-1B"
 AUDIO_MODEL = "microsoft/wavlm-base-plus"
-BATCH_SIZE = 4
+BATCH_SIZE = 1
 EPOCHS = 5
 SAVE_PATH = "checkpoints/multitask_model.pt"
 os.makedirs(os.path.dirname(SAVE_PATH), exist_ok=True)
 
+def custom_collate(batch):
+    return batch  # returns a list of samples
+
 # === Tokenizers ===
 text_tokenizer = AutoTokenizer.from_pretrained(TEXT_MODEL)
+text_tokenizer.pad_token = text_tokenizer.eos_token
+
 audio_tokenizer = AutoFeatureExtractor.from_pretrained(AUDIO_MODEL)
 
 # === Init Dataset + Loader ===
 dataset = DAICWOZDataset(root_dir="/home/dewei/workspace/dewei/dataset/daicwoz", split_csv="/home/dewei/workspace/dewei/dataset/daicwoz/train_split_Depression_AVEC2017.csv")
-dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
+dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=custom_collate)
+
+# === Validation Dataset + Loader ===
+val_dataset = DAICWOZDataset(
+    root_dir="/home/dewei/workspace/dewei/dataset/daicwoz",
+    split_csv="/home/dewei/workspace/dewei/dataset/daicwoz/val_split_Depression_AVEC2017.csv"
+)
+val_dataloader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, collate_fn=custom_collate)
+
+@torch.no_grad()
+def evaluate(model, dataloader, tokenizer, criterion):
+    model.eval()
+    total_loss = 0.0
+    correct = 0
+    total = 0
+
+    for batch in dataloader:
+        for sample in batch:
+            # Prepare inputs
+            if isinstance(sample["text"], list):
+                text_body = " ".join(str(t) for t in sample["text"])
+            else:
+                text_body = sample["text"]
+
+            prompt = sample["task"].get("prompt", "")
+            full_text = f"{prompt}\n\n{text_body}" if prompt else text_body
+
+            text_inputs = tokenizer(full_text, return_tensors="pt", padding=True, truncation=True).to(DEVICE)
+            audio_inputs = sample["audio"]
+
+            face = sample.get("face")
+            gesture = sample.get("gesture")
+            face_input = torch.tensor(face if face is not None else np.zeros((35,)), dtype=torch.float32).unsqueeze(0).to(DEVICE)
+            pose_input = torch.tensor(gesture if gesture is not None else np.zeros((6,)), dtype=torch.float32).unsqueeze(0).to(DEVICE)
+
+            label = torch.tensor([sample["label"]], dtype=torch.long).to(DEVICE)
+            task_name = sample["task"].get("name", sample["task"]["type"])
+
+            logits = model(text_inputs, audio_inputs, face_input, pose_input, task=task_name)
+            loss = criterion(logits, label)
+            total_loss += loss.item()
+
+            preds = torch.argmax(logits, dim=-1)
+            correct += (preds == label).sum().item()
+            total += 1
+
+            del text_inputs, audio_inputs, face_input, pose_input, logits, loss
+            torch.cuda.empty_cache()
+
+    avg_loss = total_loss / total
+    acc = correct / total
+    return avg_loss, acc
 
 # === Model, Optimizer, Loss ===
 model = MultiTaskMentalHealthModel(text_model=TEXT_MODEL, audio_model=AUDIO_MODEL).to(DEVICE)
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
 criterion = nn.CrossEntropyLoss()
+
 
 # === Training Loop ===
 for epoch in range(EPOCHS):
@@ -40,37 +98,58 @@ for epoch in range(EPOCHS):
         batch_loss = 0.0
 
         for sample in batch:
-            try:
-                # Preprocess inputs
-                text = " ".join(sample["text"]) if isinstance(sample["text"], list) else sample["text"]
-                text_inputs = text_tokenizer(text, return_tensors="pt", padding=True, truncation=True).to(DEVICE)
-                audio_inputs = audio_tokenizer(sample["audio"], return_tensors="pt", padding=True, truncation=True).to(DEVICE)
+            # === Extract Text ===
+            if isinstance(sample["text"], list):
+                text_body = " ".join(str(t) for t in sample["text"])
+            else:
+                text_body = sample["text"]
 
-                face_input = torch.tensor(sample["face"], dtype=torch.float32).unsqueeze(0).to(DEVICE)
-                pose_input = torch.tensor(sample["gesture"], dtype=torch.float32).unsqueeze(0).to(DEVICE)
-                label = torch.tensor([sample["label"]], dtype=torch.long).to(DEVICE)
+            # If prompt exists, prepend it
+            prompt = sample["task"].get("prompt", "")
+            full_text = f"{prompt}\n\n{text_body}" if prompt else text_body
 
-                # Task routing
-                task_type = sample["task"]["type"]
-                if task_type == "qa_generation":
-                    task_type = "phq8"
-                    task_idx = list(DAICWOZDataset.PHQ8_LABEL_COLUMNS.values()).index(sample["id"].split("_", 1)[-1])
-                    logits = model(text_inputs, audio_inputs, face_input, pose_input, task="phq8")[task_idx]
-                else:
-                    logits = model(text_inputs, audio_inputs, face_input, pose_input, task=task_type)
+            text_inputs = text_tokenizer(full_text, return_tensors="pt", padding=True, truncation=True).to(DEVICE)
+            audio_inputs = sample["audio"]
 
-                # Compute loss and backprop
-                loss = criterion(logits, label)
-                loss.backward()
-                batch_loss += loss.item()
+            # === Face / Gesture ===
+            face = sample.get("face")
+            gesture = sample.get("gesture")
+            face_input = torch.tensor(face if face is not None else np.zeros((35,)), dtype=torch.float32).unsqueeze(0).to(DEVICE)
+            pose_input = torch.tensor(gesture if gesture is not None else np.zeros((6,)), dtype=torch.float32).unsqueeze(0).to(DEVICE)
 
-            except Exception as e:
-                print(f"Skipping sample due to error: {e}")
-                continue
+            assert not torch.isnan(face_input).any(), "NaN in face_input"
+            assert not torch.isinf(face_input).any(), "Inf in face_input"
+            assert not torch.isnan(pose_input).any(), "NaN in pose_input"
+            assert label.item() >= 0, f"Invalid label: {label.item()}"
+
+            # === Label ===
+            label = torch.tensor([sample["label"]], dtype=torch.long).to(DEVICE)
+
+            # === Task Routing ===
+            task_type = sample["task"]["type"]
+            task_name = sample["task"].get("name", task_type)  # e.g., "phq8_sleep", or "emotion_meld"
+
+            logits = model(text_inputs, audio_inputs, face_input, pose_input, task=task_name)
+
+            if torch.isnan(logits).any() or torch.isinf(logits).any():
+                print("⚠️ NaN or Inf in logits!")
+                raise ValueError
+
+            # === Loss and Backprop ===
+            loss = criterion(logits, label)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
+            batch_loss += loss.item()
+            
+            del text_inputs, audio_inputs, face_input, pose_input, logits, loss
+            torch.cuda.empty_cache()
+
 
         optimizer.step()
         total_loss += batch_loss
 
     avg_loss = total_loss / len(dataloader)
-    print(f"[Epoch {epoch+1}] Loss: {avg_loss:.4f}")
+    val_loss, val_acc = evaluate(model, val_dataloader, text_tokenizer, criterion)
+    print(f"[Epoch {epoch+1}] Train Loss: {avg_loss:.4f} | Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.2%}")
 torch.save(model.state_dict(), SAVE_PATH)
