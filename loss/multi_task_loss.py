@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+
 # CCC Loss (used for affective regression)
 class ConcordanceCCCLoss(nn.Module):
     def __init__(self):
@@ -12,14 +13,22 @@ class ConcordanceCCCLoss(nn.Module):
         covariance = torch.mean((y_true - y_true_mean) * (y_pred - y_pred_mean))
         y_true_var = torch.var(y_true)
         y_pred_var = torch.var(y_pred)
-        ccc = (2 * covariance) / (y_true_var + y_pred_var + (y_true_mean - y_pred_mean) ** 2 + 1e-8)
+        ccc = (2 * covariance) / (
+            y_true_var + y_pred_var + (y_true_mean - y_pred_mean) ** 2 + 1e-8
+        )
         return 1 - ccc
 
 
 # Multi-task Loss combining affective, pathology, social, cognitive, personality
 class MultiTaskLoss(nn.Module):
-    def __init__(self, lambda_affective=1.0, lambda_pathology=1.0, lambda_social=1.0,
-                 lambda_cognitive=1.0, lambda_personality=1.0):
+    def __init__(
+        self,
+        lambda_affective=1.0,
+        lambda_pathology=1.0,
+        lambda_social=1.0,
+        lambda_cognitive=1.0,
+        lambda_personality=1.0,
+    ):
         super().__init__()
         self.lambda_affective = lambda_affective
         self.lambda_pathology = lambda_pathology
@@ -35,33 +44,45 @@ class MultiTaskLoss(nn.Module):
     def forward(self, outputs, targets):
         total_loss = 0.0
 
-        if 'affective' in outputs:
-            valence_loss = self.ccc_loss(outputs['affective'][:, 0], targets['affective'][:, 0])
-            arousal_loss = self.ccc_loss(outputs['affective'][:, 1], targets['affective'][:, 1])
+        if "affective" in outputs:
+            valence_loss = self.ccc_loss(
+                outputs["affective"][:, 0], targets["affective"][:, 0]
+            )
+            arousal_loss = self.ccc_loss(
+                outputs["affective"][:, 1], targets["affective"][:, 1]
+            )
             total_loss += self.lambda_affective * (valence_loss + arousal_loss)
 
-        if 'pathology' in outputs:
-            pathology_loss = self.mse_loss(outputs['pathology'], targets['pathology'])
+        if "pathology" in outputs:
+            pathology_loss = self.mse_loss(outputs["pathology"], targets["pathology"])
             total_loss += self.lambda_pathology * pathology_loss
 
-        if 'social' in outputs:
-            social_loss = self.bce_loss(outputs['social'], targets['social'])
+        if "social" in outputs:
+            social_loss = self.bce_loss(outputs["social"], targets["social"])
             total_loss += self.lambda_social * social_loss
 
-        if 'cognitive' in outputs:
-            cognitive_loss = self.mse_loss(outputs['cognitive'], targets['cognitive'])
+        if "cognitive" in outputs:
+            cognitive_loss = self.mse_loss(outputs["cognitive"], targets["cognitive"])
             total_loss += self.lambda_cognitive * cognitive_loss
 
-        if 'personality' in outputs:
-            personality_loss = self.bce_loss(outputs['personality'], targets['personality'])
+        if "personality" in outputs:
+            personality_loss = self.bce_loss(
+                outputs["personality"], targets["personality"]
+            )
             total_loss += self.lambda_personality * personality_loss
 
         return total_loss
-    
+
 
 def multi_task_loss(preds, labels, task):
     if task == "phq8":
-        return sum(nn.CrossEntropyLoss()(logits, labels[i]) for i, logits in enumerate(preds)) / 8
+        return (
+            sum(
+                nn.CrossEntropyLoss()(logits, labels[i])
+                for i, logits in enumerate(preds)
+            )
+            / 8
+        )
     elif task == "phq_binary":
         return nn.CrossEntropyLoss()(preds, labels)
     elif task == "emotion":

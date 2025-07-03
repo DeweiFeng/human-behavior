@@ -5,14 +5,15 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from typing import Dict, List, Tuple, Any, Optional
 
+
 def test_meld_dataloader(data_dir, split):
     dataset = MELDDataset(data_dir=data_dir, split=split)
     dataloader = DataLoader(dataset, batch_size=8, shuffle=True)
 
     for batch in dataloader:
-        videos = batch['video']
-        labels = batch['label']
-        filenames = batch['filename']
+        videos = batch["video"]
+        labels = batch["label"]
+        filenames = batch["filename"]
 
         print(type(videos))
         # do something here
@@ -27,13 +28,13 @@ def test_mosei_dataloader(data_dir, split):
         # Separate tensors and non-tensors
         tensors = {}
         non_tensors = {}
-        
+
         for key in batch[0].keys():
             if isinstance(batch[0][key], torch.Tensor):
                 tensors[key] = torch.stack([item[key] for item in batch])
             else:
                 non_tensors[key] = [item[key] for item in batch]
-        
+
         result = {**tensors, **non_tensors}
         return result
 
@@ -44,25 +45,27 @@ def test_mosei_dataloader(data_dir, split):
         batch_size: int = 32,
         shuffle: bool = True,
         num_workers: int = 0,
-        **kwargs
+        **kwargs,
     ) -> DataLoader:
-        
+
         dataset = MOSEIDataset(data_dir, split, modalities)
-        
+
         return DataLoader(
             dataset,
             batch_size=batch_size,
             shuffle=shuffle,
             num_workers=num_workers,
             collate_fn=mosei_collate_fn,
-            **kwargs
+            **kwargs,
         )
-    
+
     # Check available splits and modalities
     print("Available splits:", MOSEIDataset.get_available_splits(data_dir))
     print("Available modalities:", MOSEIDataset.get_available_modalities(data_dir))
-    
-    dataset = MOSEIDataset(data_dir, split=split, modalities=['vision', 'audio', 'text'])
+
+    dataset = MOSEIDataset(
+        data_dir, split=split, modalities=["vision", "audio", "text"]
+    )
     dataloader = create_mosei_dataloader(data_dir, split=split, batch_size=4)
 
     # Get sample
@@ -73,7 +76,7 @@ def test_mosei_dataloader(data_dir, split):
             print(f"{key}: {value.shape} ({value.dtype})")
         else:
             print(f"{key}: {value}")
-    
+
     # Test batch
     for batch in dataloader:
         print("\nBatch shapes:")

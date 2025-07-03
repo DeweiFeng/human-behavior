@@ -18,20 +18,21 @@ class MultiTaskMentalHealthModel(nn.Module):
         self.gesture_proj = nn.Sequential(nn.Linear(10, hidden_dim), nn.ReLU())
 
         self.fusion_encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=4),
-            num_layers=2
+            nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=4), num_layers=2
         )
 
-        self.task_heads = nn.ModuleDict({
-            "phq8_nointerest": nn.Linear(hidden_dim, 4),
-            "phq8_depressed": nn.Linear(hidden_dim, 4),
-            "phq8_sleep": nn.Linear(hidden_dim, 4),
-            "phq8_tired": nn.Linear(hidden_dim, 4),
-            "phq8_appetite": nn.Linear(hidden_dim, 4),
-            "phq8_failure": nn.Linear(hidden_dim, 4),
-            "phq8_concentrating": nn.Linear(hidden_dim, 4),
-            "phq8_moving": nn.Linear(hidden_dim, 4),
-        })
+        self.task_heads = nn.ModuleDict(
+            {
+                "phq8_nointerest": nn.Linear(hidden_dim, 4),
+                "phq8_depressed": nn.Linear(hidden_dim, 4),
+                "phq8_sleep": nn.Linear(hidden_dim, 4),
+                "phq8_tired": nn.Linear(hidden_dim, 4),
+                "phq8_appetite": nn.Linear(hidden_dim, 4),
+                "phq8_failure": nn.Linear(hidden_dim, 4),
+                "phq8_concentrating": nn.Linear(hidden_dim, 4),
+                "phq8_moving": nn.Linear(hidden_dim, 4),
+            }
+        )
         self.task_heads["emotion_meld"] = nn.Linear(hidden_dim, 7)
 
         self.sampling_rate = sampling_rate
@@ -53,11 +54,13 @@ class MultiTaskMentalHealthModel(nn.Module):
                 chunk,
                 sampling_rate=self.sampling_rate,
                 return_tensors="pt",
-                padding=True
+                padding=True,
             ).to(text_emb.device)
 
             out = self.audio_encoder(**inputs)
-            cls = out.last_hidden_state[:, 0, :].detach()  # 🚨 critical to prevent memory accumulation
+            cls = out.last_hidden_state[
+                :, 0, :
+            ].detach()  # 🚨 critical to prevent memory accumulation
 
             if cls_sum is None:
                 cls_sum = cls
@@ -65,7 +68,11 @@ class MultiTaskMentalHealthModel(nn.Module):
                 cls_sum += cls
             count += 1
 
-        audio_emb = (cls_sum / count) if count > 0 else torch.zeros((1, text_emb.size(1)), device=text_emb.device)
+        audio_emb = (
+            (cls_sum / count)
+            if count > 0
+            else torch.zeros((1, text_emb.size(1)), device=text_emb.device)
+        )
 
         text_emb = self.text_proj(text_emb)
         audio_emb = self.audio_proj(audio_emb)
@@ -93,7 +100,7 @@ class MultiTaskMentalHealthModel(nn.Module):
 
         chunks = []
         for start in range(0, len(waveform), chunk_size - stride_size):
-            chunk = waveform[start:start + chunk_size]
+            chunk = waveform[start : start + chunk_size]
             if len(chunk) >= sr:
                 chunks.append(chunk)
         return chunks
