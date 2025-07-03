@@ -59,16 +59,13 @@ class WESADDataset(BaseMultimodalDataset):
             print(f"Warning: No data found for subject {subject}")
             return []
 
-        # Load pickle file with correct encoding
         with open(pickle_path, 'rb') as f:
             data = pickle.load(f, encoding='latin1')
         
-        # Extract signals and labels
         chest_signals = data['signal']['chest']
         wrist_signals = data['signal']['wrist']
         labels = data['label']
 
-        # Create samples using sliding windows
         samples = []
         num_windows = len(labels) // self.window_size
         
@@ -76,15 +73,12 @@ class WESADDataset(BaseMultimodalDataset):
             start_idx = i * self.window_size
             end_idx = start_idx + self.window_size
 
-            # Extract window data
             window_labels = labels[start_idx:end_idx]
-            # Use majority label for the window
             majority_label = np.bincount(window_labels).argmax()
             
-            # Create sample with WESAD-specific modalities in metadata
             sample = MultimodalSample(
                 id=f"{subject}_window_{i}",
-                physio=None,  # We'll store individual signals in metadata
+                physio=None, 
                 label=majority_label,
                 metadata={
                     'subject': subject,
