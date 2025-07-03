@@ -49,6 +49,10 @@ class CremaDDataset(BaseMultimodalDataset):
                     }
                 )
                 self.samples.append(sample)
+        print(f"Loaded {len(self.samples)} samples.")
+        if len(self.samples) == 0:
+            print("[ERROR] No samples found. Check if path is correct and files are accessible.")
+            return
     
     def __len__(self):
         return len(self.samples)
@@ -56,8 +60,11 @@ class CremaDDataset(BaseMultimodalDataset):
     def __getitem__(self, idx):
         sample = self.samples[idx]
         if isinstance(sample.audio, str) and os.path.exists(sample.audio):
-            with open(sample.audio, "rb") as f:
-                sample.audio = f.read()
+            try: 
+                np_array = np.load(sample.audio)
+                sample.audio = torch.tensor(np_array, dtype=torch.float32)
+            except Exception as e:
+                raise RuntimeError(f"Failed to load audio tensor from {sample.audio}: {e}")
 
         return sample.to_dict()
 
@@ -97,22 +104,25 @@ def create_cremad_dataloader(
 def cremad_collate_fn(batch):
     """
     Custom collate function for CREMA-D dataset.
-    Automatically handles mixed data types (tensors, strings, dicts, bytes).
     """
     collated = {}
     for key in batch[0].keys():
-        first_val = batch[0][key]
-
-        if isinstance(first_val, torch.Tensor):
+        values = [sample[key] for sample in batch]
+        if isinstance(values[0], torch.Tensor):
             # Pad sequences to the same length
-            max_len = max(item[key].shape[0] for item in batch)
+            max_len = max(v.shape[0] for v in values)
+            # Assumes audio tensors are 2D
             padded = [
                 F.pad(item[key], (0, 0, 0, max_len - item[key].shape[0]))
                 for item in batch
             ]
             collated[key] = torch.stack(padded)
+        elif isinstance(values[0], dict):
+            collated[key] = {
+                subkey: [v[subkey] for v in values] for subkey in values[0]
+            }
         else:
-            collated[key] = [item.get(key, None) for item in batch]
+            collated[key] = values
     return collated
 
 def test_cremad_dataloader(data_dir):
@@ -139,7 +149,7 @@ def test_cremad_dataloader(data_dir):
         break
 
 if __name__ == "__main__":
-    # Requires absolute path
+
     data_dir = "~/AudioWAV"
     test_cremad_dataloader(data_dir)
 

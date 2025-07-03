@@ -73,6 +73,11 @@ class LMVDDataset(BaseMultimodalDataset):
 
                     self.samples.append(sample)
 
+        print(f"Loaded {len(self.samples)} samples.")
+        if len(self.samples) == 0:
+            print("[ERROR] No samples found. Check if path is correct and files are accessible.")
+            return
+
 
     def __len__(self):
         # Audio directory has the same number of files as video
@@ -126,21 +131,23 @@ def LMVD_collate_fn(batch):
     Custom collate function for LMVD dataset.
     Automatically handles mixed data types (tensors, strings, dicts, bytes).
     """
-    
     collated = {}
     for key in batch[0].keys():
-        first_val = batch[0][key]
-
-        if isinstance(first_val, torch.Tensor):
+        values = [sample[key] for sample in batch]
+        if isinstance(values[0], torch.Tensor):
             # Pad sequences to the same length
-            max_len = max(item[key].shape[0] for item in batch)
+            max_len = max(v.shape[0] for v in values)
             padded = [
                 F.pad(item[key], (0, 0, 0, max_len - item[key].shape[0]))
                 for item in batch
             ]
             collated[key] = torch.stack(padded)
+        elif isinstance(values[0], dict):
+            collated[key] = {
+                subkey: [v[subkey] for v in values] for subkey in values[0]
+            }
         else:
-            collated[key] = [item.get(key, None) for item in batch]
+            collated[key] = values
     return collated
 
 def test_LMVD_dataloader(data_dir):
@@ -167,7 +174,7 @@ def test_LMVD_dataloader(data_dir):
         break
 
 if __name__ == "__main__":
-    # Requires absolute path
+
     data_dir = "~/LMVD_Feature"
     test_LMVD_dataloader(data_dir)
 

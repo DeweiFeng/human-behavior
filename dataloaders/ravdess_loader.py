@@ -7,8 +7,9 @@ import matplotlib.pyplot as plt
 from torch.utils.data import Dataset, DataLoader
 from typing import Dict, List, Tuple, Any
 from dataset.template import BaseMultimodalDataset, MultimodalSample
+import torch.nn.functional as F
 
-class ravdess_loader(BaseMultimodalDataset):
+class RAVDESSDataset(BaseMultimodalDataset):
 
     EMOTION_MAP = {
         'neutral': 1,
@@ -22,13 +23,15 @@ class ravdess_loader(BaseMultimodalDataset):
     }
 
     # RAVDESS doesn't provide inherent splits
-    def __init__(self, data_dir):
+    def __init__(self, data_dir, modalities):
+        # RAVDESS has an audio_visual component outside of video and audio
         super().__init__(modality_keys=["audio", "audio-visual", "video"])
-        self.data_dir = data_dir
+        self.modalities = modalities or ["audio", "audio-visual", "video"]
+        self.data_dir = os.path.expanduser(data_dir)
         self.samples = []
 
-        for actor in os.listdir(data_dir):
-            actor_path = os.path.join(data_dir, actor)
+        for actor in os.listdir(self.data_dir):
+            actor_path = os.path.join(self.data_dir, actor)
             if not os.path.isdir(actor_path):
                 continue
 
@@ -62,9 +65,6 @@ class ravdess_loader(BaseMultimodalDataset):
 
                     sample = MultimodalSample(
                         id=utt_id,
-                        audio=audio_path,
-                        video=video_path,
-                        audio_visual=audio_visual_path,
                         label=label,
                         text=text,
                         metadata={
@@ -74,7 +74,18 @@ class ravdess_loader(BaseMultimodalDataset):
                             "repetition": repetition
                         }
                     )
+                    if "audio" in self.modalities:
+                        sample.audio = audio_path
+                    if "video" in self.modalities:
+                        sample.video = video_path
+                    if "audio-visual" in self.modalities:
+                        sample.audio_visual = audio_visual_path
                     self.samples.append(sample)
+        
+        print(f"Loaded {len(self.samples)} samples.")
+        if len(self.samples) == 0:
+            print("[ERROR] No samples found. Check if path is correct and files are accessible.")
+            return
 
     def __len__(self):
         return len(self.samples)
@@ -82,17 +93,98 @@ class ravdess_loader(BaseMultimodalDataset):
     def __getitem__(self, idx):
         sample = self.samples[idx]
 
-        for key in ["audio", "video", "audio_visual"]:
-            path = getattr(sample, key)
+        for key in ["audio", "video", "audio-visual"]:
+            path = getattr(sample, key, None)
             if isinstance(path, str) and os.path.exists(path):
-                with open(path, "rb") as f:
-                    setattr(sample, key, f.read())
+                try:
+                    # Try loading as a NumPy array (assumed .npy)
+                    np_array = np.load(path)
+                    setattr(sample, key, torch.tensor(np_array, dtype=torch.float32))
+                except Exception as e:
+                    print(f"[WARNING] Failed to load {key} as .npy tensor: {e}. Falling back to bytes.")
+                    # Fallback: read as raw bytes (e.g., .mp4)
+                    with open(path, "rb") as f:
+                        setattr(sample, key, f.read())
 
         return sample.to_dict()
     
     @classmethod
     def get_emotion_name(cls, label: int) -> str:
         return next((emo for emo, idx in cls.EMOTION_MAP.items() if idx == label), "unknown")
+    
+def ravdess_collate_fn(batch):
+    """
+    Specialized collate function for RAVDESSDataset
+    """
+    collated = {}
+    for key in batch[0].keys():
+        values = [sample[key] for sample in batch]
+        if isinstance(values[0], torch.Tensor):
+            # Pad with 0s
+            max_len = max(item[key].shape[0] for item in batch)
+            padded = [
+                F.pad(item[key], (0, 0, 0, max_len - item[key].shape[0]))
+                for item in batch
+            ]
+            collated[key] = torch.stack(padded)
+        elif isinstance(values[0], dict):
+            # Handle metadata specially
+            collated[key] = {
+                subkey: [v[subkey] for v in values] for subkey in values[0]
+            }
+        else:
+            collated[key] = [item.get(key, None) for item in batch]
+    return collated
+
+def create_ravdess_dataloader(
+    data_dir: str,
+    split: str = "train",
+    modalities: List[str] = None,
+    batch_size: int = 32,
+    shuffle: bool = True,
+    num_workers: int = 0,
+    **kwargs
+) -> DataLoader:
+    dataset = RAVDESSDataset(data_dir, modalities)
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=num_workers,
+        collate_fn=ravdess_collate_fn,
+        **kwargs
+    )
+
+def test_ravdess_dataloader(data_dir):
+    print("Initializing dataset...")
+    data_dir = os.path.expanduser(data_dir)
+    dataset = RAVDESSDataset(data_dir, modalities=['video'])
+    dataloader = create_ravdess_dataloader(data_dir, modalities=['video'], batch_size=4)
+
+    print("\nSingle sample test:")
+    sample = dataset[0]
+    print("Sample keys:", list(sample.keys()))
+    for key, value in sample.items():
+        if isinstance(value, torch.Tensor):
+            print(f"  {key}: {value.shape} ({value.dtype})")
+        else:
+            print(f"  {key}: {type(value)}")
+
+    print("\nBatch test from DataLoader:")
+    for batch in dataloader:
+        for key, val in batch.items():
+            if isinstance(val, torch.Tensor):
+                print(f"  {key}: {val.shape}")
+            else:
+                print(f"  {key}: {len(val)} items (type: {type(val[0]) if val else 'unknown'})")
+        break
+
+if __name__ == "__main__":
+
+    data_dir = "~/ravdess"
+    test_ravdess_dataloader(data_dir)
+
+
 
 
 
