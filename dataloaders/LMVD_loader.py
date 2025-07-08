@@ -8,6 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 from typing import Dict, List, Tuple, Any
 from dataset.template import BaseMultimodalDataset, MultimodalSample
 import torch.nn.functional as F
+from utils.collate_utils import lmvd_collate_fn
 
 class LMVDDataset(BaseMultimodalDataset):
     TYPE_MAP = {
@@ -122,33 +123,9 @@ def create_LMVD_dataloader(
         batch_size=batch_size,
         shuffle=shuffle,
         num_workers=num_workers,
-        collate_fn=LMVD_collate_fn,
+        collate_fn=lmvd_collate_fn,
         **kwargs
     )
-
-def LMVD_collate_fn(batch):
-    """
-    Custom collate function for LMVD dataset.
-    Automatically handles mixed data types (tensors, strings, dicts, bytes).
-    """
-    collated = {}
-    for key in batch[0].keys():
-        values = [sample[key] for sample in batch]
-        if isinstance(values[0], torch.Tensor):
-            # Pad sequences to the same length
-            max_len = max(v.shape[0] for v in values)
-            padded = [
-                F.pad(item[key], (0, 0, 0, max_len - item[key].shape[0]))
-                for item in batch
-            ]
-            collated[key] = torch.stack(padded)
-        elif isinstance(values[0], dict):
-            collated[key] = {
-                subkey: [v[subkey] for v in values] for subkey in values[0]
-            }
-        else:
-            collated[key] = values
-    return collated
 
 def test_LMVD_dataloader(data_dir):
     print("Initializing dataset...")
