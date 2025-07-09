@@ -7,6 +7,7 @@ from utils import get_frame_paths, load_rubrics_json, find_test_prompt, load_non
 
 def main(config):
     # Instantiate model
+    # TODO: make this generalisable and modular such that it works with intern_vl
     qwen = QwenVL(use_flash_attention=config.get("use_flash_attention", False))
 
     # Determine input type
@@ -17,8 +18,8 @@ def main(config):
         video_path = os.path.join(test_segment_dir, f"{segment_name}.mp4")
         print(f"Using video: {video_path}")
 
-        messages, meta_data = qwen.prepare_message(
-            video_input=video_path,
+        video_content, meta_data = qwen.fetch_inputs(
+            vision_input_paths=video_path,
             prompt=config["prompt"],
             is_video_path=True,
             fps=config.get("fps", 1.0)
@@ -40,8 +41,8 @@ def main(config):
             "frame_paths": frame_paths
         }
 
-        messages, meta_data = qwen.prepare_message(
-            video_input=frame_paths,
+        video_content, meta_data = qwen.fetch_inputs(
+            vision_input_paths=frame_paths,
             prompt=config["prompt"],
             is_video_path=False,
             fps=config.get("fps", 1.0)
@@ -52,7 +53,8 @@ def main(config):
         raise ValueError("Invalid use_video_or_frames option. Must be 'video' or 'frames'.")
 
     # Run inference
-    inputs = qwen.process_inputs(messages)
+    inputs = qwen.process_inputs(video_content=video_content, 
+                                 prompt=config["prompt"])
     outputs = qwen.generate(inputs)
 
     # Appending the remaining meta data

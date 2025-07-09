@@ -4,7 +4,7 @@
 SEGMENTS_DIR="/scratch/keane/human_behaviour_data/ados_videos_and_frames/sample_1"
 # Specify multiple segments by name (no commas!)
 # SPECIFIC_SEGMENT_NAMES=("response_to_joint_attention_1" "response_to_name" "responsive_social_smile_1" "responsive_social_smile_2" "responsive_social_smile_3" "responsive_social_smile_4")
-SPECIFIC_SEGMENT_NAMES=("bubble_play")
+SPECIFIC_SEGMENT_NAMES=("anticipation_of_routine_7")
 RUN_PARALLEL=true   # Set to false to run serially
 
 RUBRICS_JSON="/home/keaneong/human-behavior/data/autism/ados_prompts/autism_scoring.json"
@@ -18,7 +18,7 @@ RUN_NON_TEST_PROMPT=false
 
 # Set this flag to true to run ALL module + test_type from rubrics_json
 # if this is true, we will not run the non test prompt
-RUN_ALL_TESTS=false
+RUN_ALL_TESTS=true
 
 # If RUN_ALL_TESTS=true, you can EXCLUDE specific module/test_type below:
 # if you want to exclude the entire module, set EXCLUDED_MODULES=("Module Name")

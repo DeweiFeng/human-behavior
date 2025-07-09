@@ -2,6 +2,7 @@ import torch
 import json
 from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
 from qwen_vl_utils import process_vision_info
+from abs_vl import VisionLanguageModel  # your original class
 import cv2
 import os
 
@@ -17,7 +18,80 @@ def get_video_duration(video_path):
     cap.release()
     return duration_sec
 
-class QwenVL:
+class QwenVL(VisionLanguageModel):
+    def fetch_inputs(self, vision_input_paths, prompt, is_video_path=False, fps=1.0, max_pixels=None):
+        """Prepare video content dict and meta data"""
+        if is_video_path:
+            video_content = {
+                "type": "video",
+                "video": f"file://{vision_input_paths}",
+                "fps": fps
+            }
+            if max_pixels:
+                video_content["max_pixels"] = max_pixels
+
+            # Get video duration
+            duration_sec = get_video_duration(vision_input_paths)
+
+            meta_data = {
+                "input_type": "video",
+                "prompt": prompt,
+                "fps": fps,
+                "video_path": vision_input_paths,
+                "duration_sec": duration_sec
+            }
+
+        else:
+            # passing the frames directly
+            num_frames = len(vision_input_paths)
+            duration_sec = num_frames / fps if fps > 0 else 0
+
+            video_content = {
+                "type": "video",
+                "video": vision_input_paths,
+                "fps": fps
+            }
+
+            meta_data = {
+                "input_type": "frames",
+                "prompt": prompt,
+                "fps": fps,
+                "num_frames": num_frames,
+                "duration_sec": duration_sec
+            }
+
+        return video_content, meta_data
+
+    def process_inputs(self, video_content, prompt):
+
+        messages = [{
+            "role": "user",
+            "content": [
+                video_content,
+                {"type": "text", "text": prompt}
+            ]
+        }]
+
+        """Process vision + text inputs for model"""
+        text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        image_inputs, video_inputs, video_kwargs = process_vision_info(messages, return_video_kwargs=True)
+
+        inputs = self.processor(
+            text=[text],
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pt",
+            **video_kwargs
+        )
+        inputs = inputs.to(self.device)
+        return inputs
+
+    def generate(self, inputs, max_new_tokens=1256):
+        """Run inference"""
+        with torch.no_grad():
+            generated_ids = self.model.generate(**inputs, max_new_tokens=max_new_tokens)
+
     def __init__(self, model_id="Qwen/Qwen2.5-VL-7B-Instruct", device="cuda", use_flash_attention=False):
         print("Loading model...")
         attn_impl = "flash_attention_2" if use_flash_attention else None
@@ -34,35 +108,36 @@ class QwenVL:
         self.processor = AutoProcessor.from_pretrained(model_id)
         self.device = device
 
-    def prepare_message(self, video_input, prompt, is_video_path=False, fps=1.0, max_pixels=None):
-        """Prepare message dict and meta data"""
+    def fetch_inputs(self, vision_input_paths, prompt, is_video_path=False, fps=1.0, max_pixels=None):
+        """Prepare video content dict and meta data"""
         if is_video_path:
             video_content = {
                 "type": "video",
-                "video": f"file://{video_input}",
+                "video": f"file://{vision_input_paths}",
                 "fps": fps
             }
             if max_pixels:
                 video_content["max_pixels"] = max_pixels
 
             # Get video duration
-            duration_sec = get_video_duration(video_input)
+            duration_sec = get_video_duration(vision_input_paths)
 
             meta_data = {
                 "input_type": "video",
                 "prompt": prompt,
                 "fps": fps,
-                "video_path": video_input,
+                "video_path": vision_input_paths,
                 "duration_sec": duration_sec
             }
 
         else:
-            num_frames = len(video_input)
+            # passing the frames directly
+            num_frames = len(vision_input_paths)
             duration_sec = num_frames / fps if fps > 0 else 0
 
             video_content = {
                 "type": "video",
-                "video": video_input,
+                "video": vision_input_paths,
                 "fps": fps
             }
 
@@ -74,6 +149,10 @@ class QwenVL:
                 "duration_sec": duration_sec
             }
 
+        return video_content, meta_data
+
+    def process_inputs(self, video_content, prompt):
+
         messages = [{
             "role": "user",
             "content": [
@@ -82,9 +161,6 @@ class QwenVL:
             ]
         }]
 
-        return messages, meta_data
-
-    def process_inputs(self, messages):
         """Process vision + text inputs for model"""
         text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         image_inputs, video_inputs, video_kwargs = process_vision_info(messages, return_video_kwargs=True)
@@ -116,34 +192,3 @@ class QwenVL:
             clean_up_tokenization_spaces=False
         )
         return output_text
-
-
-    def save_outputs(self, output_text, save_path, meta_data={}):
-        """Append outputs + meta-data to json (or create new file if not exists)"""
-        save_entry = {
-            "outputs": output_text,
-            "meta": meta_data
-        }
-
-        # If file exists → load existing list
-        if os.path.exists(save_path):
-            with open(save_path, "r", encoding="utf-8") as f:
-                try:
-                    existing_data = json.load(f)
-                    if not isinstance(existing_data, list):
-                        print(f"Warning: Existing JSON is not a list — overwriting.")
-                        existing_data = []
-                except json.JSONDecodeError:
-                    print(f"Warning: JSON decode error — overwriting.")
-                    existing_data = []
-        else:
-            existing_data = []
-
-        # Append new entry
-        existing_data.append(save_entry)
-
-        # Write back to file
-        with open(save_path, "w", encoding="utf-8") as f:
-            json.dump(existing_data, f, indent=2)
-
-        print(f"Appended output to {save_path} (total entries: {len(existing_data)})")
