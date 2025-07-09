@@ -6,12 +6,13 @@ from transformers import AutoModel, AutoTokenizer
 import torch
 
 class InternVL(VisionLanguageModel):
-    def __init__(self, model_id='OpenGVLab/InternVL3-8B', device='cuda'):
+    def __init__(self, model_id='OpenGVLab/InternVL3-8B', device_map=None):
         print("Loading InternVL model...")
         self.model_id = model_id
-        self.device = device
-        self.device_map = split_model(model_id)
 
+        if device_map == "init": 
+            self.device_map = split_model("InternVL3-8B")
+            
         self.model = AutoModel.from_pretrained(
             model_id,
             torch_dtype=torch.bfloat16,
@@ -32,7 +33,7 @@ class InternVL(VisionLanguageModel):
         self.generation_config = generation_config
 
     def fetch_inputs(self, vision_input_path, prompt, bound=None, input_size=448, num_segments=8, max_num=1):
-        # Here vision_input_path is assumed to be a video
+        # Here vision_input_path is assumed to be a video's path
         pixel_values, num_patches_list = load_video(
             vision_input_path, bound=bound, input_size=input_size,
             num_segments=num_segments, max_num=max_num

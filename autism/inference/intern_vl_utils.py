@@ -141,32 +141,34 @@ def load_video(video_path, bound=None, input_size=448, max_num=1, num_segments=3
     pixel_values = torch.cat(pixel_values_list)
     return pixel_values, num_patches_list
 
-# If you set `load_in_8bit=True`, you will need two 80GB GPUs.
-# If you set `load_in_8bit=False`, you will need at least three 80GB GPUs.
-path = 'OpenGVLab/InternVL3-8B'
-device_map = split_model('InternVL3-8B')
-model = AutoModel.from_pretrained(
-    path,
-    torch_dtype=torch.bfloat16,
-    load_in_8bit=True,
-    low_cpu_mem_usage=True,
-    use_flash_attn=True,
-    trust_remote_code=True,
-    device_map="cuda").eval()
-tokenizer = AutoTokenizer.from_pretrained(path, trust_remote_code=True, use_fast=False)
+if __name__ == "__main__":
+
+    # If you set `load_in_8bit=True`, you will need two 80GB GPUs.
+    # If you set `load_in_8bit=False`, you will need at least three 80GB GPUs.
+    path = 'OpenGVLab/InternVL3-8B'
+    device_map = split_model('InternVL3-8B')
+    model = AutoModel.from_pretrained(
+        path,
+        torch_dtype=torch.bfloat16,
+        load_in_8bit=True,
+        low_cpu_mem_usage=True,
+        use_flash_attn=True,
+        trust_remote_code=True,
+        device_map="cuda").eval()
+    tokenizer = AutoTokenizer.from_pretrained(path, trust_remote_code=True, use_fast=False)
 
 
-video_path = './examples/red-panda.mp4'
-pixel_values, num_patches_list = load_video(video_path, num_segments=8, max_num=1)
-pixel_values = pixel_values.to(torch.bfloat16).cuda()
-video_prefix = ''.join([f'Frame{i+1}: <image>\n' for i in range(len(num_patches_list))])
-question = video_prefix + 'What is the red panda doing?'
-# Frame1: <image>\nFrame2: <image>\n...\nFrame8: <image>\n{question}
-response, history = model.chat(tokenizer, pixel_values, question, generation_config,
-                               num_patches_list=num_patches_list, history=None, return_history=True)
-print(f'User: {question}\nAssistant: {response}')
+    video_path = './examples/red-panda.mp4'
+    pixel_values, num_patches_list = load_video(video_path, num_segments=8, max_num=1)
+    pixel_values = pixel_values.to(torch.bfloat16).cuda()
+    video_prefix = ''.join([f'Frame{i+1}: <image>\n' for i in range(len(num_patches_list))])
+    question = video_prefix + 'What is the red panda doing?'
+    # Frame1: <image>\nFrame2: <image>\n...\nFrame8: <image>\n{question}
+    response, history = model.chat(tokenizer, pixel_values, question, generation_config,
+                                num_patches_list=num_patches_list, history=None, return_history=True)
+    print(f'User: {question}\nAssistant: {response}')
 
-question = 'Describe this video in detail.'
-response, history = model.chat(tokenizer, pixel_values, question, generation_config,
-                               num_patches_list=num_patches_list, history=history, return_history=True)
-print(f'User: {question}\nAssistant: {response}')
+    question = 'Describe this video in detail.'
+    response, history = model.chat(tokenizer, pixel_values, question, generation_config,
+                                num_patches_list=num_patches_list, history=history, return_history=True)
+    print(f'User: {question}\nAssistant: {response}')

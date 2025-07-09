@@ -19,6 +19,22 @@ def get_video_duration(video_path):
     return duration_sec
 
 class QwenVL(VisionLanguageModel):
+    def __init__(self, model_id="Qwen/Qwen2.5-VL-7B-Instruct", device="cuda", use_flash_attention=False):
+        print("Loading model...")
+        attn_impl = "flash_attention_2" if use_flash_attention else None
+
+        self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+            model_id,
+            torch_dtype=torch.bfloat16 if use_flash_attention else "auto",
+            attn_implementation=attn_impl,
+            device_map="auto"
+        )
+        self.model.eval()
+
+        print("Loading processor...")
+        self.processor = AutoProcessor.from_pretrained(model_id)
+        self.device = device
+    
     def fetch_inputs(self, vision_input_paths, prompt, is_video_path=False, fps=1.0, max_pixels=None):
         """Prepare video content dict and meta data"""
         if is_video_path:
@@ -91,22 +107,6 @@ class QwenVL(VisionLanguageModel):
         """Run inference"""
         with torch.no_grad():
             generated_ids = self.model.generate(**inputs, max_new_tokens=max_new_tokens)
-
-    def __init__(self, model_id="Qwen/Qwen2.5-VL-7B-Instruct", device="cuda", use_flash_attention=False):
-        print("Loading model...")
-        attn_impl = "flash_attention_2" if use_flash_attention else None
-
-        self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-            model_id,
-            torch_dtype=torch.bfloat16 if use_flash_attention else "auto",
-            attn_implementation=attn_impl,
-            device_map="auto"
-        )
-        self.model.eval()
-
-        print("Loading processor...")
-        self.processor = AutoProcessor.from_pretrained(model_id)
-        self.device = device
 
     def fetch_inputs(self, vision_input_paths, prompt, is_video_path=False, fps=1.0, max_pixels=None):
         """Prepare video content dict and meta data"""
