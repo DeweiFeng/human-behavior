@@ -1,0 +1,22 @@
+### NOTE: This assumes that you have a directory of segments as folders, 
+# and within each segment, you have frames (in a folder) and the mp4 video file.
+test_segment_dir: "/home/human-behavior/autism/data/ados_videos_and_frames/sample_1/anticipation_of_routine_1"
+
+## Data configuration
+use_video_or_frames: "video"  # Set "video" for loading mp4 video, set "frames" for loarding jpg frames
+fps: 1.0
+slice_start: 0.0
+slice_end: 1.0
+
+## Prompt configuration
+rubrics_json: "/home/human-behavior/autism/data/ados_prompts/autism_scoring.json"
+module: "B: Reciprocal Social Interaction"
+test_type: "B3. Facial Expressions Directed to Others"
+# non_test_prompt: "/home/human-behavior/autism/inference/non_test_prompt.txt"  # Leave empty if using test_json (i.e. if doing test classification; otherwise, use your custom prompt for non-test classification)
+non_test_prompt: ""
+
+## Output directory
+output_path: "/home/human-behavior/autism/data/qwen_vl_outputs/test_from_rubrics.json"
+
+## Model paramters
+use_flash_attention: false
