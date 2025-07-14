@@ -254,17 +254,14 @@ def mosei_training(
     """
     
     
-    # Set device
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     else:
         device = torch.device(device)
     
-    # Set default modalities if not provided
     if modalities is None:
         modalities = ["vision", "audio", "text"]
     
-    # Create save directory
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     
     if verbose:
@@ -273,14 +270,10 @@ def mosei_training(
         print(f"Modalities: {modalities}")
         print(f"Data directory: {data_dir}")
     
-    # Load datasets
-    if verbose:
-        print("Loading MOSEI datasets...")
     
     train_dataset = MOSEIDataset(data_dir, train_split, modalities)
     val_dataset = MOSEIDataset(data_dir, val_split, modalities)
     
-    # Create dataloaders
     train_loader = create_mosei_dataloader(
         data_dir, train_split, modalities, batch_size, 
         shuffle=True, num_workers=num_workers
@@ -294,7 +287,6 @@ def mosei_training(
         print(f"Train samples: {len(train_dataset)}")
         print(f"Val samples: {len(val_dataset)}")
     
-    # Get dataset information
     modality_shapes = train_dataset.get_modality_shapes()
     label_info = train_dataset.get_label_info()
     
@@ -302,7 +294,6 @@ def mosei_training(
         print("Modality shapes:", modality_shapes)
         print("Label info:", label_info)
     
-    # Prepare dataset info for the main training script
     dataset_info = {
         'name': 'MOSEI',
         'train_samples': len(train_dataset),
@@ -314,7 +305,6 @@ def mosei_training(
         'num_classes': 1  # Single output for regression
     }
     
-    # Prepare training configuration
     training_config = {
         'batch_size': batch_size,
         'epochs': epochs,
@@ -374,7 +364,7 @@ def mosei_process_batch(batch, device):
         'labels': labels
     }
     
-    # Process vision (facial features)
+    # vision
     if 'vision' in batch_device and batch_device['vision'] is not None:
         vision_data = batch_device['vision']
         # Average over time dimension if present
@@ -384,7 +374,7 @@ def mosei_process_batch(batch, device):
             vision_features = vision_data
         processed_inputs['vision'] = vision_features
     
-    # Process audio (acoustic features)
+    # audio
     if 'audio' in batch_device and batch_device['audio'] is not None:
         audio_data = batch_device['audio']
         # Average over time dimension if present
@@ -394,7 +384,7 @@ def mosei_process_batch(batch, device):
             audio_features = audio_data
         processed_inputs['audio'] = audio_features
     
-    # Process text (linguistic features)
+    # text
     if 'text' in batch_device and batch_device['text'] is not None:
         text_data = batch_device['text']
         # Average over time dimension if present
