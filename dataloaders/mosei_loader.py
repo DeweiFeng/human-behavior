@@ -5,11 +5,15 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 import sys
-import torch
 from dataset.template import BaseMultimodalDataset, MultimodalSample
 from typing import Dict, List, Tuple, Any, Optional
 from torch.utils.data import DataLoader
-
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from tqdm import tqdm
+import json
+from datetime import datetime
 
 class MOSEIDataset(BaseMultimodalDataset):
     """
@@ -205,3 +209,247 @@ def test_mosei_dataloader(data_dir, split):
             else:
                 print(f"  {key}: {len(value)} items (list)")
         break
+
+
+def mosei_training(
+    data_dir: str,
+    train_split: str = "train",
+    val_split: str = "valid",
+    modalities: List[str] = None,
+    batch_size: int = 32,
+    epochs: int = 50,
+    learning_rate: float = 1e-4,
+    weight_decay: float = 1e-5,
+    device: str = None,
+    num_workers: int = 4,
+    save_path: str = "checkpoints/mosei_model.pt",
+    verbose: bool = True
+):
+    """
+    MOSEI training function that can be integrated with train_script.py.
+    
+    This function sets up MOSEI-specific data loaders and returns them
+    along with any MOSEI-specific configurations needed for training.
+    
+    Args:
+        data_dir: Directory containing MOSEI data files
+        train_split: Training split name
+        val_split: Validation split name
+        modalities: List of modalities to use ('vision', 'audio', 'text')
+        batch_size: Training batch size
+        epochs: Number of training epochs
+        learning_rate: Learning rate for optimizer
+        weight_decay: Weight decay for optimizer
+        device: Device to train on ('cuda', 'cpu', or None for auto)
+        num_workers: Number of data loader workers
+        save_path: Path to save the trained model
+        verbose: Whether to print training progress
+    
+    Returns:
+        Dictionary containing:
+        - train_loader: Training data loader
+        - val_loader: Validation data loader
+        - dataset_info: Information about the dataset
+        - training_config: Configuration for training
+    """
+    
+    
+    # Set device
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    else:
+        device = torch.device(device)
+    
+    # Set default modalities if not provided
+    if modalities is None:
+        modalities = ["vision", "audio", "text"]
+    
+    # Create save directory
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    
+    if verbose:
+        print(f"MOSEI Training Setup")
+        print(f"Device: {device}")
+        print(f"Modalities: {modalities}")
+        print(f"Data directory: {data_dir}")
+    
+    # Load datasets
+    if verbose:
+        print("Loading MOSEI datasets...")
+    
+    train_dataset = MOSEIDataset(data_dir, train_split, modalities)
+    val_dataset = MOSEIDataset(data_dir, val_split, modalities)
+    
+    # Create dataloaders
+    train_loader = create_mosei_dataloader(
+        data_dir, train_split, modalities, batch_size, 
+        shuffle=True, num_workers=num_workers
+    )
+    val_loader = create_mosei_dataloader(
+        data_dir, val_split, modalities, batch_size, 
+        shuffle=False, num_workers=num_workers
+    )
+    
+    if verbose:
+        print(f"Train samples: {len(train_dataset)}")
+        print(f"Val samples: {len(val_dataset)}")
+    
+    # Get dataset information
+    modality_shapes = train_dataset.get_modality_shapes()
+    label_info = train_dataset.get_label_info()
+    
+    if verbose:
+        print("Modality shapes:", modality_shapes)
+        print("Label info:", label_info)
+    
+    # Prepare dataset info for the main training script
+    dataset_info = {
+        'name': 'MOSEI',
+        'train_samples': len(train_dataset),
+        'val_samples': len(val_dataset),
+        'modalities': modalities,
+        'modality_shapes': modality_shapes,
+        'label_info': label_info,
+        'task_type': 'regression',  # MOSEI is regression for sentiment scores
+        'num_classes': 1  # Single output for regression
+    }
+    
+    # Prepare training configuration
+    training_config = {
+        'batch_size': batch_size,
+        'epochs': epochs,
+        'learning_rate': learning_rate,
+        'weight_decay': weight_decay,
+        'device': device,
+        'save_path': save_path,
+        'criterion': nn.MSELoss(),  # MSE loss for regression
+        'optimizer_class': optim.AdamW,
+        'scheduler_class': optim.lr_scheduler.ReduceLROnPlateau,
+        'scheduler_kwargs': {'mode': 'min', 'factor': 0.5, 'patience': 5},
+        'gradient_clip_val': 1.0,
+        'early_stopping_patience': 10
+    }
+    
+    return {
+        'train_loader': train_loader,
+        'val_loader': val_loader,
+        'dataset_info': dataset_info,
+        'training_config': training_config
+    }
+
+
+def mosei_process_batch(batch, device):
+    """
+    Process a MOSEI batch for training.
+    
+    This function converts MOSEI batch data into the format expected
+    by the MultiTaskMentalHealthModel or other models.
+    
+    Args:
+        batch: Batch from MOSEI dataloader
+        device: Device to move tensors to
+    
+    Returns:
+        Dictionary with processed inputs and labels
+    """
+    import torch
+    import numpy as np
+    
+    # Move batch to device
+    batch_device = {}
+    for key, value in batch.items():
+        if isinstance(value, torch.Tensor):
+            batch_device[key] = value.to(device)
+        else:
+            batch_device[key] = value
+    
+    # Get labels
+    labels = batch_device['label'].float()
+    
+    # Process modalities for the model
+    processed_inputs = {
+        'vision': None,
+        'audio': None,
+        'text': None,
+        'labels': labels
+    }
+    
+    # Process vision (facial features)
+    if 'vision' in batch_device and batch_device['vision'] is not None:
+        vision_data = batch_device['vision']
+        # Average over time dimension if present
+        if len(vision_data.shape) == 3:  # [batch, time, features]
+            vision_features = vision_data.mean(dim=1)  # [batch, features]
+        else:
+            vision_features = vision_data
+        processed_inputs['vision'] = vision_features
+    
+    # Process audio (acoustic features)
+    if 'audio' in batch_device and batch_device['audio'] is not None:
+        audio_data = batch_device['audio']
+        # Average over time dimension if present
+        if len(audio_data.shape) == 3:  # [batch, time, features]
+            audio_features = audio_data.mean(dim=1)  # [batch, features]
+        else:
+            audio_features = audio_data
+        processed_inputs['audio'] = audio_features
+    
+    # Process text (linguistic features)
+    if 'text' in batch_device and batch_device['text'] is not None:
+        text_data = batch_device['text']
+        # Average over time dimension if present
+        if len(text_data.shape) == 3:  # [batch, time, features]
+            text_features = text_data.mean(dim=1)  # [batch, features]
+        else:
+            text_features = text_data
+        processed_inputs['text'] = text_features
+    
+    return processed_inputs
+
+
+def mosei_evaluate(model, val_loader, device, criterion):
+    """
+    Evaluate MOSEI model performance.
+    
+    Args:
+        model: The model to evaluate
+        val_loader: Validation data loader
+        device: Device to run evaluation on
+        criterion: Loss function
+    
+    Returns:
+        Dictionary with evaluation metrics
+    """
+    import torch
+    
+    model.eval()
+    total_loss = 0.0
+    total_mae = 0.0
+    num_batches = 0
+    
+    with torch.no_grad():
+        for batch in val_loader:
+            # Process batch
+            processed_inputs = mosei_process_batch(batch, device)
+            labels = processed_inputs['labels']
+            
+            # Forward pass
+            outputs = model(processed_inputs)
+            loss = criterion(outputs, labels)
+            
+            # Calculate metrics
+            mae = torch.mean(torch.abs(outputs - labels))
+            
+            total_loss += loss.item()
+            total_mae += mae.item()
+            num_batches += 1
+    
+    avg_loss = total_loss / num_batches
+    avg_mae = total_mae / num_batches
+    
+    return {
+        'val_loss': avg_loss,
+        'val_mae': avg_mae
+    }
+
+
