@@ -4,7 +4,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer, AutoFeatureExtractor
 from models import MultiTaskMentalHealthModel
-from datasets import MELDDataset, WESADDataset, MOSEIDataset
+from dataloaders.mosei_loader import MOSEIDataset
 from tqdm import tqdm
 from utils.collate_utils import unified_collate_fn as custom_collate
 import numpy as np
@@ -32,8 +32,9 @@ audio_tokenizer = AutoFeatureExtractor.from_pretrained(AUDIO_MODEL)
 
 # === Init Dataset + Loader ===
 dataset = MOSEIDataset(
-    data_dir="/home/dewei/workspace/dewei/dataset/daicwoz", #TODO: change directories after ssh'ing
-    split="/home/dewei/workspace/dewei/dataset/daicwoz/train_split_Depression_AVEC2017.csv",
+    data_dir="../orcd/pool/MOSEI",  # TODO: Update to your MOSEI data path
+    split="train",
+    modalities=["vision", "audio", "text"]
 )
 dataloader = DataLoader(
     dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=custom_collate
@@ -41,8 +42,9 @@ dataloader = DataLoader(
 
 # === Validation Dataset + Loader ===
 val_dataset = MOSEIDataset(
-    root_dir="/home/dewei/workspace/dewei/dataset/daicwoz",
-    split_csv="/home/dewei/workspace/dewei/dataset/daicwoz/dev_split_Depression_AVEC2017.csv",
+    data_dir="../orcd/pool/MOSEI",  # TODO: Update to your MOSEI data path
+    split="valid",
+    modalities=["vision", "audio", "text"]
 )
 val_dataloader = DataLoader(
     val_dataset, batch_size=BATCH_SIZE, shuffle=False, collate_fn=custom_collate
