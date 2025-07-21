@@ -1,11 +1,11 @@
 data:
-  train_files: /scratch/high_modality/geom_train_upsampled.jsonl
-  val_files: /scratch/high_modality/geom_valid_mini.jsonl
+  train_files: /home/keaneong/human-behavior/data/instruction/meld_instruction_train.jsonl
+  val_files: /home/keaneong/human-behavior/data/instruction/meld_instruction_val.jsonl
   prompt_key: problem
   answer_key: answer
   image_key: images
   video_key: videos
-  image_dir: /orcd/home/002/dvdai/orcd/scratch/high_modality
+  image_dir: /scratch/keane/human_behaviour_data
   video_fps: 2.0
   max_prompt_length: 6144
   max_response_length: 4096
