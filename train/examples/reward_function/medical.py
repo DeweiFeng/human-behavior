@@ -305,6 +305,7 @@ def medical_compute_score_batch(batch_inputs: List[Dict]) -> List[Dict[str, floa
         ground_truth = input_dict["ground_truth"]
         segmentation_mask = input_dict.get("segmentation_mask")
         bbox = input_dict.get("bbox")
+
         
         # Calculate standard score
         answer = extract_boxed_content(predict_str)
