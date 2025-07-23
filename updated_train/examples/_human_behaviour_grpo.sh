@@ -5,7 +5,7 @@ set -euo pipefail
 # source /path/to/venv/bin/activate
 
 python -m verl.trainer.main \
-    config=examples/grpo_climb_engaging.yaml \
+    config=/home/human-behavior/updated_train/examples/grpo_climb_engaging.yaml \
     data.train_files=/home/keaneong/human-behavior/data/instruction/meld_instruction_train.jsonl \
     data.val_files=/home/keaneong/human-behavior/data/instruction/meld_instruction_val.jsonl \
     data.image_dir=/scratch/keane/human_behaviour_data \
