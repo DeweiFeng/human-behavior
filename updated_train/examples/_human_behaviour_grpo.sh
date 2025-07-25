@@ -9,7 +9,7 @@ set -euo pipefail
 # Image directory is where the images are stored
 # This does not cover testing
 
-python -m /home/human-behavior/updated_train/verl/trainer/main \
+python -m verl.trainer.main \
     config=/home/keaneong/human-behavior/updated_train/examples/grpo_climb_engaging.yaml \
     data.train_files=/home/keaneong/human-behavior/data/instruction/meld_instruction_train.jsonl \
     data.val_files=/home/keaneong/human-behavior/data/instruction/meld_instruction_val.jsonl \
@@ -19,3 +19,4 @@ python -m /home/human-behavior/updated_train/verl/trainer/main \
     trainer.n_gpus_per_node=1 \
     worker.actor.optim.lr=5e-6 \
     trainer.experiment_name=grpo_vanilla_unified
+
