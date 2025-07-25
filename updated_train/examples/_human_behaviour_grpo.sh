@@ -9,7 +9,7 @@ set -euo pipefail
 # Image directory is where the images are stored
 # This does not cover testing
 
-python -m /home/human-behavior/updated_train/verl/trainer/main.py \
+python -m /home/human-behavior/updated_train/verl/trainer/main \
     config=/home/keaneong/human-behavior/updated_train/examples/grpo_climb_engaging.yaml \
     data.train_files=/home/keaneong/human-behavior/data/instruction/meld_instruction_train.jsonl \
     data.val_files=/home/keaneong/human-behavior/data/instruction/meld_instruction_val.jsonl \
