@@ -15,8 +15,6 @@
 import re
 from typing import Any, Dict, List
 
-from mathruler.grader import extract_boxed_content, grade_answer
-
 
 def format_reward(response: str) -> float:
     pattern = re.compile(r"<think>.*</think>.*\\boxed\{.*\}.*", re.DOTALL)
@@ -25,9 +23,10 @@ def format_reward(response: str) -> float:
 
 
 def accuracy_reward(response: str, ground_truth: str) -> float:
-    answer = extract_boxed_content(response)
-    return 1.0 if grade_answer(answer, ground_truth) else 0.0
-
+    if response == ground_truth:
+        return 1.0
+    else:
+        return 0.0
 
 def compute_score(reward_inputs: List[Dict[str, Any]], format_weight: float = 0.1) -> List[Dict[str, float]]:
     if not isinstance(reward_inputs, list):
@@ -40,7 +39,8 @@ def compute_score(reward_inputs: List[Dict[str, Any]], format_weight: float = 0.
         accuracy_score = accuracy_reward(response, reward_input["ground_truth"])
         scores.append(
             {
-                "overall": (1 - format_weight) * accuracy_score + format_weight * format_score,
+                # "overall": (1 - format_weight) * accuracy_score + format_weight * format_score,
+                "overall": accuracy_score,
                 "format": format_score,
                 "accuracy": accuracy_score,
             }
@@ -49,3 +49,23 @@ def compute_score(reward_inputs: List[Dict[str, Any]], format_weight: float = 0.
     return scores
 
 
+
+# Compute score function should have the following:
+
+# batch_inputs: List of dictionaries containing:
+#             - response: The model's prediction string
+#             - response_length: Length of the response
+#             - ground_truth: The ground truth string
+#             - segmentation_mask: Ground truth segmentation mask tensor (optional)
+#             - bbox: Ground truth bounding box (optional)
+
+# Returns: List of score dictionaries
+
+# each score dictionary should contain:
+# {
+#             "overall": 0.5 * standard_score + 0.3 * iou_score + 0.1 * format_score + 0.1 * length_score,
+#             "standard_score": standard_score,
+#             "iou_score": iou_score,
+#             "format_score": format_score,
+#             "length_score": length_score,
+#         }

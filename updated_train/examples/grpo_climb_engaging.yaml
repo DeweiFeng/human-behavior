@@ -12,7 +12,7 @@ data:
   rollout_batch_size: 512  # equivalent to verl's data.train_batch_size
   mini_rollout_batch_size: null  # equivalent to verl's data.gen_batch_size
   val_batch_size: 1024
-  format_prompt: /home/keaneong/human-behavior/updated_train/examples/format_prompt/medical_format.jinja
+  format_prompt: /home/human-behavior/updated_train/examples/format_prompt/human_behaviour.jinja
   override_chat_template: null
   shuffle: true
   seed: 1
@@ -83,7 +83,7 @@ worker:
 
   reward:
     reward_type: batch
-    reward_function: /home/keaneong/human-behavior/updated_train/examples/reward_function/medical.py:medical_compute_score_batch
+    reward_function: /home/human-behavior/updated_train/examples/reward_function/human_behaviour.py:compute_score
     num_cpus: 8  # number of CPUs for reward function computation
 
 trainer:
